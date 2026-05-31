@@ -61,7 +61,7 @@ public class ApplicationController {
     }
 
     // ==================== POST: Создать новую заявку ====================
-    @PostMapping(consumes = {"multipart/form-data"})
+    @PostMapping
     public ResponseEntity<?> createApplication(
             @RequestParam("fullName") String fullName,
             @RequestParam("email") String email,
