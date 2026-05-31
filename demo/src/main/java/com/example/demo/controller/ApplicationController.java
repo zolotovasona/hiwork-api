@@ -309,30 +309,14 @@ public class ApplicationController {
     }
 
     // ==================== DELETE: Отклонить заявку ====================
-    @DeleteMapping("/{id}")
-    public ResponseEntity<?> reject(@PathVariable Long id) {
-        try {
-            Application app = appRepo.findById(id)
-                    .orElseThrow(() -> new RuntimeException("Заявка не найдена"));
-
-            app.setStatus("rejected");
-            appRepo.save(app);
-
-            log.info("✅ Заявка " + id + " отклонена");
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "message", "Заявка отклонена",
-                    "status", "rejected"
-            ));
-
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        } catch (Exception e) {
-            log.log(Level.SEVERE, "Ошибка при отклонении заявки", e);
-            return ResponseEntity.internalServerError()
-                    .body(Map.of("error", "Ошибка сервера: " + e.getMessage()));
-        }
+@DeleteMapping("/{id}")
+public ResponseEntity<?> reject(@PathVariable Long id) {
+    if (!appRepo.existsById(id)) {
+        return ResponseEntity.badRequest().body(Map.of("error", "Заявка не найдена"));
     }
+    appRepo.deleteById(id); // ✅ Физическое удаление
+    return ResponseEntity.ok(Map.of("success", true, "message", "Заявка удалена"));
+}
 
     // ==================== ВСПОМОГАТЕЛЬНЫЙ МЕТОД: Сохранение файла ====================
     private String saveFile(MultipartFile file, String category) throws IOException {
