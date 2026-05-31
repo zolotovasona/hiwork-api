@@ -23,4 +23,10 @@ public interface ApplicationRepository extends JpaRepository<Application, Long> 
 
     @Query("SELECT a FROM Application a WHERE a.qrCodeExpiresAt IS NOT NULL AND a.qrCodeExpiresAt < :now")
     List<Application> findExpiredQrCodes(@Param("now") LocalDateTime now);
+
+    @Query("SELECT DISTINCT a.careerTrack FROM Application a WHERE a.careerTrack IS NOT NULL AND a.careerTrack != '' ORDER BY a.careerTrack")
+    List<String> findDistinctCareerTracks();
+
+    @Query("SELECT DISTINCT a.department FROM Application a WHERE a.department IS NOT NULL AND a.department != '' ORDER BY a.department")
+    List<String> findDistinctDepartments();
 }
