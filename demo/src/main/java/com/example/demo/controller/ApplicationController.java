@@ -259,55 +259,47 @@ public class ApplicationController {
     }
 
     // ==================== POST: Перегенерировать QR-код ====================
-    @PostMapping("/{id}/regenerate-qr")
-    public ResponseEntity<?> regenerateQr(@PathVariable Long id) {
-        try {
-            Application app = appRepo.findById(id)
-                    .orElseThrow(() -> new RuntimeException("Заявка не найдена"));
+@PostMapping("/{id}/regenerate-qr")
+public ResponseEntity<?> regenerateQr(@PathVariable Long id) {
+    try {
+        Application app = appRepo.findById(id)
+                .orElseThrow(() -> new RuntimeException("Заявка не найдена"));
 
-            if (!"hired".equalsIgnoreCase(app.getStatus())) {
-                return ResponseEntity.badRequest()
-                        .body(Map.of("error", "Перегенерация доступна только для принятых сотрудников"));
-            }
+        if (!"hired".equals(app.getStatus())) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Перегенерация доступна только для принятых"));
+        }
 
-            User employee = userRepo.findByEmail(app.getEmail())
-                    .orElseThrow(() -> new RuntimeException("Сотрудник не найден"));
+        // Генерируем новый код
+        String newQr = String.format("%07d", new java.util.Random().nextInt(10_000_000));
+        LocalDateTime newExpires = LocalDateTime.now().plusMinutes(2);
 
-            // Новый код и время
-            String newQr = String.format("%07d", new java.util.Random().nextInt(10_000_000));
-            LocalDateTime newExpires = LocalDateTime.now().plusMinutes(2);
+        // ✅ ОБНОВЛЯЕМ ПОЛЯ
+        app.setQrCode(newQr);
+        app.setQrCodeExpiresAt(newExpires);
+        
+        // ✅ СОХРАНЯЕМ В БАЗУ (это критично!)
+        appRepo.save(app);
 
+        // Если есть User — обновляем и его
+        User employee = userRepo.findByEmail(app.getEmail()).orElse(null);
+        if (employee != null) {
             employee.setQrCode(newQr);
             employee.setQrCodeExpiresAt(newExpires);
             userRepo.save(employee);
-
-            // Письмо (не блокируем)
-            try {
-                String qrImageUrl = baseUrl + "/api/qr/generate?code=" + newQr + "&size=250";
-                emailService.sendQrRegenerated(employee.getEmail(), employee.getFullName(), newQr, qrImageUrl);
-            } catch (Exception mailErr) {
-                log.warning("⚠️ Письмо о новом коде не отправлено: " + mailErr.getMessage());
-            }
-
-            log.info("✅ QR перегенерирован для: " + employee.getEmail());
-
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "qrCode", newQr,
-                    "expiresAt", newExpires.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
-                    "secondsRemaining", 120,
-                    "message", "Код обновлён"
-            ));
-
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        } catch (Exception e) {
-            log.log(Level.SEVERE, "Ошибка при перегенерации QR", e);
-            return ResponseEntity.internalServerError()
-                    .body(Map.of("error", "Ошибка сервера: " + e.getMessage()));
         }
-    }
 
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "qrCode", newQr,
+                "expiresAt", newExpires.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+        ));
+
+    } catch (Exception e) {
+        return ResponseEntity.internalServerError()
+                .body(Map.of("error", "Ошибка: " + e.getMessage()));
+    }
+}
     // ==================== DELETE: Отклонить заявку ====================
 @DeleteMapping("/{id}")
 public ResponseEntity<?> reject(@PathVariable Long id) {
