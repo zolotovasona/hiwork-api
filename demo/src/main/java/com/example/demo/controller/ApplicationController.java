@@ -311,36 +311,16 @@ public ResponseEntity<?> reject(@PathVariable Long id) {
 }
 
     // ==================== ВСПОМОГАТЕЛЬНЫЙ МЕТОД: Сохранение файла ====================
-    private String saveFile(MultipartFile file, String category) throws IOException {
-        if (file.isEmpty()) {
-            throw new IllegalArgumentException("Пустой файл");
-        }
-
-        String originalName = file.getOriginalFilename();
-        if (originalName == null || originalName.isEmpty()) {
-            throw new IllegalArgumentException("Неизвестное имя файла");
-        }
-
-        // Безопасное извлечение расширения
-        String extension = "";
-        int dotIndex = originalName.lastIndexOf('.');
-        if (dotIndex > 0 && dotIndex < originalName.length() - 1) {
-            extension = originalName.substring(dotIndex).toLowerCase();
-        }
-
-        // Уникальное имя
-        String uniqueName = UUID.randomUUID().toString() + extension;
-        Path path = Paths.get(uploadDir + category + "/" + uniqueName);
-
-        // Создаём папку, если нет
-        Files.createDirectories(path.getParent());
-
-        // Сохраняем файл
-        Files.write(path, file.getBytes());
-
-        // ✅ Возвращаем ПОЛНЫЙ URL для доступа из Android/веба
-        return baseUrl + "/api/files/" + category + "/" + uniqueName;
-    }
+private String saveFile(MultipartFile file, String category) throws IOException {
+    if (file.isEmpty()) throw new IllegalArgumentException("Пустой файл");
+    
+    byte[] bytes = file.getBytes();
+    String mime = file.getContentType() != null ? file.getContentType() : "application/octet-stream";
+    String base64 = java.util.Base64.getEncoder().encodeToString(bytes);
+    
+    // Возвращаем Data URI строку. Spring сохранит её в БД как обычный текст.
+    return "data:" + mime + ";base64," + base64;
+}
     // === GET: Доступные опции для выпадающих списков ===
     @GetMapping("/options")
     public ResponseEntity<?> getAvailableOptions() {
