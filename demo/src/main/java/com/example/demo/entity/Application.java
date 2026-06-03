@@ -3,7 +3,7 @@ package com.example.demo.entity;
 import lombok.Data;
 import org.hibernate.annotations.CreationTimestamp;
 
-import javax.persistence.*;
+import jakarta.persistence.*;  // ✅ JAKARTA вместо JAVAX!
 import java.time.LocalDateTime;
 
 @Data
@@ -24,7 +24,6 @@ public class Application {
     @Column(nullable = false)
     private String careerTrack;
 
-    // ✅ ДОБАВЬ @Column(columnDefinition = "TEXT")
     @Column(columnDefinition = "TEXT")
     private String aboutMe;
 
