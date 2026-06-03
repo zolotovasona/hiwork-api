@@ -1,10 +1,9 @@
 package com.example.demo.entity;
 
-import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.CreationTimestamp;
-import org.springframework.data.annotation.Id;
 
+import javax.persistence.*;
 import java.time.LocalDateTime;
 
 @Data
@@ -25,6 +24,7 @@ public class Application {
     @Column(nullable = false)
     private String careerTrack;
 
+    // ✅ ДОБАВЬ @Column(columnDefinition = "TEXT")
     @Column(columnDefinition = "TEXT")
     private String aboutMe;
 
@@ -36,10 +36,10 @@ public class Application {
 
     @Column(columnDefinition = "TEXT")
     private String resumeUrl;
-
+    
     @Column(columnDefinition = "TEXT")
     private String portfolioUrl;
-
+    
     @Column(columnDefinition = "TEXT")
     private String profilePhotoUrl;
 
