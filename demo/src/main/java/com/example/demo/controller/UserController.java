@@ -52,4 +52,29 @@ public class UserController {
                     .body(Map.of("error", e.getMessage()));
         }
     }
+    // ✅ Удалить сотрудника
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteEmployee(@PathVariable Long id) {
+        try {
+            User user = userRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Сотрудник не найден"));
+
+            if (!"EMPLOYEE".equalsIgnoreCase(user.getRole())) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "Можно удалять только сотрудников"));
+            }
+
+            userRepository.delete(user);
+            System.out.println("✅ Сотрудник удалён: " + user.getEmail());
+
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Сотрудник уволен"
+            ));
+
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
 }
