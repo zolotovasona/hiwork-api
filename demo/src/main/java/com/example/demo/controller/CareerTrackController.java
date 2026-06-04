@@ -104,4 +104,24 @@ public class CareerTrackController {
                     .body(Map.of("error", e.getMessage()));
         }
     }
+    // ✅ Удалить трек
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteTrack(@PathVariable Long id) {
+        try {
+            CareerTrack track = careerTrackRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Трек не найден"));
+        
+            careerTrackRepository.delete(track);
+            System.out.println("✅ Трек удалён: " + track.getName());
+        
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Трек удалён"
+            ));
+        
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
 }
