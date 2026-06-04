@@ -5,6 +5,7 @@ import com.example.demo.entity.User;
 import com.example.demo.repository.ApplicationRepository;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.service.EmailService;
+import com.example.demo.service.FileService;
 import lombok.extern.java.Log;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -19,7 +20,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -31,18 +31,29 @@ import java.util.logging.Level;
 @Log
 public class ApplicationController {
 
-    @Autowired private ApplicationRepository appRepo;
-    @Autowired private UserRepository userRepo;
-    @Autowired private PasswordEncoder passwordEncoder;
-    @Autowired private EmailService emailService;
+    @Autowired
+    private ApplicationRepository appRepo;
 
-    // ✅ Базовый URL для формирования полных ссылок на файлы (для Render)
+    @Autowired
+    private UserRepository userRepo;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private EmailService emailService;
+
+    @Autowired
+    private ApplicationRepository applicationRepository;
+
+    @Autowired
+    private FileService fileService;
+
     @Value("${app.base-url:https://hiwork-api.onrender.com}")
     private String baseUrl;
 
     private final String uploadDir = "uploads/";
 
-    // ==================== GET: Получить все заявки ====================
     @GetMapping
     public ResponseEntity<?> getAll(@RequestParam(required = false) String status) {
         try {
@@ -60,88 +71,53 @@ public class ApplicationController {
         }
     }
 
-    // ==================== POST: Создать новую заявку ====================
     @PostMapping
     public ResponseEntity<?> createApplication(
-            @RequestParam("fullName") String fullName,
-            @RequestParam("email") String email,
-            @RequestParam("careerTrack") String careerTrack,
-            @RequestParam("aboutMe") String aboutMe,
-            @RequestParam(value = "department", required = false) String department,
-            @RequestParam(value = "experience", required = false) String experience,
-            @RequestParam(value = "resumeText", required = false) String resumeText,
-            @RequestParam(value = "resume", required = false) MultipartFile resume,
-            @RequestParam(value = "resumeFile", required = false) MultipartFile resumeFile,
-            @RequestParam(value = "portfolio", required = false) MultipartFile portfolio,
-            @RequestParam(value = "photo", required = false) MultipartFile photo) {
-
+            @RequestParam String fullName,
+            @RequestParam String email,
+            @RequestParam String careerTrack,
+            @RequestParam(required = false) String department,
+            @RequestParam(required = false) String experience,
+            @RequestParam(required = false) String aboutMe,
+            @RequestParam(required = false) String resumeTextContent,
+            @RequestParam(required = false) MultipartFile resumeFile,
+            @RequestParam(required = false) MultipartFile portfolio,
+            @RequestParam(required = false) MultipartFile photo
+    ) {
         try {
-            // Валидация обязательных полей
-            if (fullName == null || fullName.trim().isEmpty()) {
-                return ResponseEntity.badRequest().body(Map.of("error", "ФИО обязательно"));
-            }
-            if (email == null || email.trim().isEmpty()) {
-                return ResponseEntity.badRequest().body(Map.of("error", "Email обязателен"));
-            }
-            if (careerTrack == null || careerTrack.trim().isEmpty()) {
-                return ResponseEntity.badRequest().body(Map.of("error", "Карьерный трек обязателен"));
-            }
-
             Application app = new Application();
-            app.setFullName(fullName.trim());
-            app.setEmail(email.trim().toLowerCase());
-            app.setCareerTrack(careerTrack.trim());
-            app.setAboutMe(aboutMe != null ? aboutMe.trim() : "");
-            app.setDepartment(department != null ? department.trim() : "");
-            app.setExperience(experience != null ? experience : "0");
+            app.setFullName(fullName);
+            app.setEmail(email);
+            app.setCareerTrack(careerTrack);
+            app.setDepartment(department);
+            app.setExperience(experience);
+            app.setAboutMe(aboutMe);
+            app.setResumeTextContent(resumeTextContent);
             app.setStatus("new");
-            app.setCreatedAt(LocalDateTime.now());
 
-            // 📝 Резюме: текст
-            if (resumeText != null && !resumeText.trim().isEmpty()) {
-                app.setResumeTextContent(resumeText.trim());
-            }
-
-            // 📎 Резюме: файл (поддержка двух имён поля для совместимости)
-            MultipartFile resumeToSave = null;
-            if (resume != null && !resume.isEmpty()) {
-                resumeToSave = resume;
-            } else if (resumeFile != null && !resumeFile.isEmpty()) {
-                resumeToSave = resumeFile;
-            }
-            if (resumeToSave != null) {
-                app.setResumeUrl(saveFile(resumeToSave, "resume"));
-            }
-
-            // 📁 Портфолио
-            if (portfolio != null && !portfolio.isEmpty()) {
-                app.setPortfolioUrl(saveFile(portfolio, "portfolio"));
-            }
-
-            // 🖼 Фото профиля
+            // ✅ Сохраняем файлы
             if (photo != null && !photo.isEmpty()) {
-                app.setProfilePhotoUrl(saveFile(photo, "photo"));
+                String photoUrl = fileService.saveFile(photo, "photo");
+                app.setProfilePhotoUrl(photoUrl);
             }
 
-            appRepo.save(app);
-            log.info("✅ Новая заявка создана: " + app.getEmail());
+            if (resumeFile != null && !resumeFile.isEmpty()) {
+                String resumeUrl = fileService.saveFile(resumeFile, "resume");
+                app.setResumeUrl(resumeUrl);
+            }
 
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "id", app.getId(),
-                    "message", "Заявка успешно отправлена"
-            ));
+            if (portfolio != null && !portfolio.isEmpty()) {
+                String portfolioUrl = fileService.saveFile(portfolio, "portfolio");
+                app.setPortfolioUrl(portfolioUrl);
+            }
 
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            applicationRepository.save(app);
+            return ResponseEntity.ok(Map.of("success", true, "id", app.getId()));
         } catch (Exception e) {
-            log.log(Level.SEVERE, "Ошибка при создании заявки", e);
-            return ResponseEntity.internalServerError()
-                    .body(Map.of("error", "Ошибка сервера: " + e.getMessage()));
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
 
-    // ==================== POST: Пригласить на собеседование ====================
     @PostMapping("/{id}/interview")
     public ResponseEntity<?> interview(@PathVariable Long id) {
         try {
@@ -156,7 +132,6 @@ public class ApplicationController {
             app.setStatus("interviewing");
             appRepo.save(app);
 
-            // Отправляем письмо (не блокируем процесс, если почта не работает)
             try {
                 emailService.sendInterviewInvite(app.getEmail(), app.getFullName());
             } catch (Exception mailErr) {
@@ -179,7 +154,6 @@ public class ApplicationController {
         }
     }
 
-    // ==================== POST: Принять на работу (с генерацией QR) ====================
     @PostMapping("/{id}/hire")
     public ResponseEntity<?> hire(@PathVariable Long id, @RequestBody(required = false) Map<String, String> updates) {
         try {
@@ -191,7 +165,6 @@ public class ApplicationController {
                         .body(Map.of("error", "Можно принять только кандидата с собеседования"));
             }
 
-            // Обновляем данные, если переданы
             if (updates != null) {
                 if (updates.containsKey("fullName") && updates.get("fullName") != null) {
                     app.setFullName(updates.get("fullName").trim());
@@ -204,7 +177,6 @@ public class ApplicationController {
                 }
             }
 
-            // 🎫 Генерация QR-кода
             String qrCode = String.format("%07d", new java.util.Random().nextInt(10_000_000));
             LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(2);
 
@@ -213,10 +185,9 @@ public class ApplicationController {
             app.setStatus("hired");
             appRepo.save(app);
 
-            // 👤 Создаём или обновляем пользователя
             User employee = userRepo.findByEmail(app.getEmail()).orElse(new User());
             employee.setEmail(app.getEmail());
-            employee.setPasswordHash(passwordEncoder.encode("temp123")); // Временный пароль
+            employee.setPasswordHash(passwordEncoder.encode("temp123"));
             employee.setFullName(app.getFullName());
             employee.setCareerTrack(app.getCareerTrack());
             employee.setDepartment(app.getDepartment());
@@ -230,7 +201,6 @@ public class ApplicationController {
             employee.setCreatedAt(LocalDateTime.now());
             userRepo.save(employee);
 
-            // 📧 Отправляем письмо с подтверждением (не блокируем процесс)
             try {
                 String qrImageUrl = baseUrl + "/api/qr/generate?code=" + qrCode + "&size=250";
                 emailService.sendHireConfirmation(employee.getEmail(), employee.getFullName(), qrCode, qrImageUrl);
@@ -240,7 +210,6 @@ public class ApplicationController {
 
             log.info("✅ Сотрудник принят: " + employee.getEmail() + ", QR: " + qrCode);
 
-            // ✅ Возвращаем expiresAt в формате, который поймёт Android
             return ResponseEntity.ok(Map.of(
                     "success", true,
                     "qrCode", qrCode,
@@ -258,70 +227,77 @@ public class ApplicationController {
         }
     }
 
-    // ==================== POST: Перегенерировать QR-код ====================
-@PostMapping("/{id}/regenerate-qr")
-public ResponseEntity<?> regenerateQr(@PathVariable Long id) {
-    try {
-        Application app = appRepo.findById(id)
-                .orElseThrow(() -> new RuntimeException("Заявка не найдена"));
+    @PostMapping("/{id}/regenerate-qr")
+    public ResponseEntity<?> regenerateQr(@PathVariable Long id) {
+        try {
+            Application app = appRepo.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Заявка не найдена"));
 
-        if (!"hired".equals(app.getStatus())) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", "Перегенерация доступна только для принятых"));
+            if (!"hired".equals(app.getStatus())) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "Перегенерация доступна только для принятых"));
+            }
+
+            String newQr = String.format("%07d", new java.util.Random().nextInt(10_000_000));
+            LocalDateTime newExpires = LocalDateTime.now().plusMinutes(2);
+
+            app.setQrCode(newQr);
+            app.setQrCodeExpiresAt(newExpires);
+            appRepo.save(app);
+
+            User employee = userRepo.findByEmail(app.getEmail()).orElse(null);
+            if (employee != null) {
+                employee.setQrCode(newQr);
+                employee.setQrCodeExpiresAt(newExpires);
+                userRepo.save(employee);
+            }
+
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "qrCode", newQr,
+                    "expiresAt", newExpires.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+            ));
+
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("error", "Ошибка: " + e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> reject(@PathVariable Long id) {
+        if (!appRepo.existsById(id)) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Заявка не найдена"));
+        }
+        appRepo.deleteById(id);
+        return ResponseEntity.ok(Map.of("success", true, "message", "Заявка удалена"));
+    }
+
+    private String saveFile(MultipartFile file, String category) throws IOException {
+        if (file.isEmpty()) {
+            throw new IllegalArgumentException("Пустой файл");
         }
 
-        // Генерируем новый код
-        String newQr = String.format("%07d", new java.util.Random().nextInt(10_000_000));
-        LocalDateTime newExpires = LocalDateTime.now().plusMinutes(2);
-
-        // ✅ ОБНОВЛЯЕМ ПОЛЯ
-        app.setQrCode(newQr);
-        app.setQrCodeExpiresAt(newExpires);
-        
-        // ✅ СОХРАНЯЕМ В БАЗУ (это критично!)
-        appRepo.save(app);
-
-        // Если есть User — обновляем и его
-        User employee = userRepo.findByEmail(app.getEmail()).orElse(null);
-        if (employee != null) {
-            employee.setQrCode(newQr);
-            employee.setQrCodeExpiresAt(newExpires);
-            userRepo.save(employee);
+        String originalName = file.getOriginalFilename();
+        if (originalName == null || originalName.isEmpty()) {
+            throw new IllegalArgumentException("Неизвестное имя файла");
         }
 
-        return ResponseEntity.ok(Map.of(
-                "success", true,
-                "qrCode", newQr,
-                "expiresAt", newExpires.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-        ));
+        String extension = "";
+        int dotIndex = originalName.lastIndexOf('.');
+        if (dotIndex > 0 && dotIndex < originalName.length() - 1) {
+            extension = originalName.substring(dotIndex).toLowerCase();
+        }
 
-    } catch (Exception e) {
-        return ResponseEntity.internalServerError()
-                .body(Map.of("error", "Ошибка: " + e.getMessage()));
-    }
-}
-    // ==================== DELETE: Отклонить заявку ====================
-@DeleteMapping("/{id}")
-public ResponseEntity<?> reject(@PathVariable Long id) {
-    if (!appRepo.existsById(id)) {
-        return ResponseEntity.badRequest().body(Map.of("error", "Заявка не найдена"));
-    }
-    appRepo.deleteById(id); // ✅ Физическое удаление
-    return ResponseEntity.ok(Map.of("success", true, "message", "Заявка удалена"));
-}
+        String uniqueName = UUID.randomUUID().toString() + extension;
+        Path path = Paths.get(uploadDir + category + "/" + uniqueName);
 
-    // ==================== ВСПОМОГАТЕЛЬНЫЙ МЕТОД: Сохранение файла ====================
-private String saveFile(MultipartFile file, String category) throws IOException {
-    if (file.isEmpty()) throw new IllegalArgumentException("Пустой файл");
-    
-    byte[] bytes = file.getBytes();
-    String mime = file.getContentType() != null ? file.getContentType() : "application/octet-stream";
-    String base64 = java.util.Base64.getEncoder().encodeToString(bytes);
-    
-    // Возвращаем Data URI строку. Spring сохранит её в БД как обычный текст.
-    return "data:" + mime + ";base64," + base64;
-}
-    // === GET: Доступные опции для выпадающих списков ===
+        Files.createDirectories(path.getParent());
+        Files.write(path, file.getBytes());
+
+        return baseUrl + "/api/files/" + category + "/" + uniqueName;
+    }
+
     @GetMapping("/options")
     public ResponseEntity<?> getAvailableOptions() {
         try {
@@ -336,6 +312,31 @@ private String saveFile(MultipartFile file, String category) throws IOException 
             log.log(Level.SEVERE, "Ошибка при получении опций", e);
             return ResponseEntity.internalServerError()
                     .body(Map.of("error", "Не удалось загрузить опции"));
+        }
+    }
+
+    @PostMapping("/auth/login")
+    public ResponseEntity<?> login(@RequestBody Map<String, String> credentials) {
+        try {
+            String email = credentials.get("email");
+            String password = credentials.get("password");
+
+            User user = userRepo.findByEmail(email)
+                    .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
+
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "userId", user.getId(),
+                    "role", user.getRole(),
+                    "fullName", user.getFullName(),
+                    "email", user.getEmail()
+            ));
+
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.log(Level.SEVERE, "Login error", e);
+            return ResponseEntity.internalServerError().body(Map.of("error", "Ошибка сервера"));
         }
     }
 }
