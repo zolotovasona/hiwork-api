@@ -93,17 +93,6 @@ public class CareerTrackController {
                     .body(Map.of("error", e.getMessage()));
         }
     }
-
-    @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteTrack(@PathVariable Long id) {
-        try {
-            careerTrackRepository.deleteById(id);
-            return ResponseEntity.ok(Map.of("success", true));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", e.getMessage()));
-        }
-    }
     // ✅ Удалить трек
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteTrack(@PathVariable Long id) {
