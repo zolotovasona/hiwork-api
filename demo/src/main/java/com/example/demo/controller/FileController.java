@@ -26,18 +26,16 @@ public class FileController {
             @PathVariable String category,
             @PathVariable String filename) {
         try {
-            // Валидация категории
             if (!category.matches("^(resume|portfolio|photo)$")) {
                 return ResponseEntity.badRequest().body("Неверная категория");
             }
-            // Валидация имени файла
             if (filename.contains("..") || filename.contains("/")) {
                 return ResponseEntity.badRequest().body("Неверное имя файла");
             }
 
-            // ✅ АБСОЛЮТНЫЙ ПУТЬ (надёжно на Render)
-            Path filePath = Paths.get(System.getProperty("user.dir"), uploadDir, category, filename).normalize();
-            
+            Path filePath = Paths.get(System.getProperty("user.dir"), "uploads", category, filename).normalize();
+            log.info("Trying to serve: " + filePath.toString());
+
             if (!Files.exists(filePath)) {
                 log.warning("File not found: " + filePath);
                 return ResponseEntity.notFound().build();
