@@ -131,4 +131,23 @@ public class EmailService {
 
         sendEmail(email, subject, html);
     }
+    // ✅ Уведомление HR о новой заявке
+    public void notifyHrAboutNewApplicant(String applicantName, String applicantEmail, String careerTrack) {
+        if (hrEmail == null || hrEmail.isEmpty()) {
+            System.out.println("⚠️ HR email не настроен. Уведомление не отправлено.");
+            return;
+        }
+
+        String subject = "🆕 Новая заявка: " + applicantName;
+        String html = "<div style='font-family: sans-serif; padding: 20px;'>" +
+                "<h2 style='color: #667eea;'>Поступила новая заявка!</h2>" +
+                "<p><b>ФИО:</b> " + applicantName + "</p>" +
+                "<p><b>Email:</b> " + applicantEmail + "</p>" +
+                "<p><b>Карьерный трек:</b> " + careerTrack + "</p>" +
+                "<hr>" +
+                "<p style='color: #888;'>Откройте приложение HIWork для обработки.</p>" +
+                "</div>";
+    
+        sendEmail(hrEmail, subject, html);
+    }
 }
