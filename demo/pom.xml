@@ -59,6 +59,20 @@
             <scope>runtime</scope>
         </dependency>
 
+		<!-- OkHttp для HTTP-запросов к Resend API -->
+		<dependency>
+    		<groupId>com.squareup.okhttp3</groupId>
+    		<artifactId>okhttp</artifactId>
+    		<version>4.12.0</version>
+		</dependency>
+
+		<!-- JSON для работы с JSON -->
+		<dependency>
+    		<groupId>org.json</groupId>
+    		<artifactId>json</artifactId>
+    		<version>20240303</version>
+		</dependency>
+
         <!-- === UTILS === -->
         <dependency>
             <groupId>org.projectlombok</groupId>
