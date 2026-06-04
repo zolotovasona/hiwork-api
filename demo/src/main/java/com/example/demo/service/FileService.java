@@ -1,6 +1,5 @@
 package com.example.demo.service;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -13,11 +12,10 @@ import java.util.UUID;
 @Service
 public class FileService {
 
-    @Value("${app.upload-dir:uploads/}")
-    private String uploadDir;
+    private static final String UPLOAD_DIR = "/tmp/uploads/";
 
     public String saveFile(MultipartFile file, String type) throws IOException {
-        Path categoryPath = Paths.get(uploadDir, type);
+        Path categoryPath = Paths.get(UPLOAD_DIR, type);
         if (!Files.exists(categoryPath)) {
             Files.createDirectories(categoryPath);
             System.out.println("✅ Создана папка: " + categoryPath.toAbsolutePath());
