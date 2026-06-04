@@ -19,7 +19,8 @@ import java.nio.file.Paths;
 @Log
 public class FileController {
 
-    private final String uploadDir = "uploads/";
+    // ✅ Тот же абсолютный путь!
+    private static final String UPLOAD_DIR = "/tmp/uploads/";
 
     @GetMapping("/{category}/{filename}")
     public ResponseEntity<?> downloadFile(
@@ -33,7 +34,8 @@ public class FileController {
                 return ResponseEntity.badRequest().body("Неверное имя файла");
             }
 
-            Path filePath = Paths.get(System.getProperty("user.dir"), "uploads", category, filename).normalize();
+            // ✅ Абсолютный путь
+            Path filePath = Paths.get(UPLOAD_DIR, category, filename).normalize();
             log.info("Trying to serve: " + filePath.toString());
 
             if (!Files.exists(filePath)) {
