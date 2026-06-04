@@ -1,11 +1,9 @@
 package com.example.demo.controller;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import jakarta.annotation.PostConstruct;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,30 +16,13 @@ import java.util.UUID;
 @RequestMapping("/api/upload")
 @CrossOrigin(origins = "*")
 public class FileUploadController {
-
-    @Value("${app.upload-dir:uploads/}")
-    private String uploadDir;
+    
+    // ✅ Тот же абсолютный путь!
+    private static final String UPLOAD_DIR = "/tmp/uploads/";
 
     private static final List<String> ALLOWED_TYPES = List.of("resume", "portfolio", "photo");
     private static final List<String> ALLOWED_EXTENSIONS = List.of(
             ".pdf", ".doc", ".docx", ".txt", ".jpg", ".jpeg", ".png", ".gif", ".zip", ".rar");
-
-    // ✅ СОЗДАЁМ ПАПКИ ПРИ ЗАПУСКЕ СЕРВЕРА
-    @PostConstruct
-    public void init() {
-        try {
-            for (String type : ALLOWED_TYPES) {
-                Path categoryPath = Paths.get(uploadDir, type);
-                if (!Files.exists(categoryPath)) {
-                    Files.createDirectories(categoryPath);
-                    System.out.println("✅ Создана папка: " + categoryPath.toAbsolutePath());
-                }
-            }
-            System.out.println("✅ Все папки для файлов готовы!");
-        } catch (IOException e) {
-            System.err.println("❌ Ошибка создания папок: " + e.getMessage());
-        }
-    }
 
     @PostMapping
     public ResponseEntity<?> uploadFile(@RequestParam("file") MultipartFile file,
@@ -65,7 +46,7 @@ public class FileUploadController {
 
         try {
             String filename = UUID.randomUUID().toString() + extension;
-            Path categoryPath = Paths.get(uploadDir, type);
+            Path categoryPath = Paths.get(UPLOAD_DIR, type);
             Files.createDirectories(categoryPath);
             Path filePath = categoryPath.resolve(filename);
             Files.write(filePath, file.getBytes());
