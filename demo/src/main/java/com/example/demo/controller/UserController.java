@@ -77,4 +77,38 @@ public class UserController {
                     .body(Map.of("error", e.getMessage()));
         }
     }
+    // ✅ Обновить данные сотрудника
+    @PatchMapping("/{id}")
+    public ResponseEntity<?> updateEmployee(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+        try {
+            User user = userRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Сотрудник не найден"));
+
+            if (!"EMPLOYEE".equalsIgnoreCase(user.getRole())) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "Можно обновлять только сотрудников"));
+            }
+
+            // Обновляем только переданные поля
+            if (body.containsKey("careerTrack")) {
+                user.setCareerTrack((String) body.get("careerTrack"));
+            }
+            if (body.containsKey("department")) {
+                user.setDepartment((String) body.get("department"));
+            }
+
+            userRepository.save(user);
+            System.out.println("✅ Сотрудник обновлён: " + user.getEmail());
+
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Данные сотрудника обновлены",
+                    "employeeId", user.getId()
+            ));
+
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
 }
