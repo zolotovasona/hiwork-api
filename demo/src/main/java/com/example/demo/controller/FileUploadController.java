@@ -5,6 +5,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import jakarta.annotation.PostConstruct;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,6 +18,7 @@ import java.util.UUID;
 @RequestMapping("/api/upload")
 @CrossOrigin(origins = "*")
 public class FileUploadController {
+
     @Value("${app.upload-dir:uploads/}")
     private String uploadDir;
 
@@ -24,10 +26,27 @@ public class FileUploadController {
     private static final List<String> ALLOWED_EXTENSIONS = List.of(
             ".pdf", ".doc", ".docx", ".txt", ".jpg", ".jpeg", ".png", ".gif", ".zip", ".rar");
 
+    // ✅ СОЗДАЁМ ПАПКИ ПРИ ЗАПУСКЕ СЕРВЕРА
+    @PostConstruct
+    public void init() {
+        try {
+            for (String type : ALLOWED_TYPES) {
+                Path categoryPath = Paths.get(uploadDir, type);
+                if (!Files.exists(categoryPath)) {
+                    Files.createDirectories(categoryPath);
+                    System.out.println("✅ Создана папка: " + categoryPath.toAbsolutePath());
+                }
+            }
+            System.out.println("✅ Все папки для файлов готовы!");
+        } catch (IOException e) {
+            System.err.println("❌ Ошибка создания папок: " + e.getMessage());
+        }
+    }
+
     @PostMapping
     public ResponseEntity<?> uploadFile(@RequestParam("file") MultipartFile file,
                                         @RequestParam("type") String type) {
-        // Валидация типа
+
         if (type == null || !ALLOWED_TYPES.contains(type.toLowerCase())) {
             return ResponseEntity.badRequest()
                     .body(Map.of("error", "Недопустимый тип: " + type));
@@ -36,7 +55,6 @@ public class FileUploadController {
             return ResponseEntity.badRequest().body(Map.of("error", "Файл пуст"));
         }
 
-        // Валидация расширения
         String originalFilename = file.getOriginalFilename();
         String extension = originalFilename != null && originalFilename.contains(".") ?
                 originalFilename.substring(originalFilename.lastIndexOf(".")).toLowerCase() : "";
@@ -51,6 +69,8 @@ public class FileUploadController {
             Files.createDirectories(categoryPath);
             Path filePath = categoryPath.resolve(filename);
             Files.write(filePath, file.getBytes());
+
+            System.out.println("✅ Файл сохранён: " + filePath.toAbsolutePath());
 
             String fileUrl = "/api/files/" + type + "/" + filename;
             return ResponseEntity.ok(Map.of(
