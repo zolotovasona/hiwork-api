@@ -1,6 +1,10 @@
 package com.example.demo.service;
 
-import okhttp3.*;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -16,9 +20,13 @@ public class EmailService {
     @Value("${resend.from.email:onboarding@resend.dev}")
     private String fromEmail;
 
+    @Value("${app.hr.email:test@mail.ru}")
+    private String hrEmail;
+
     private static final String RESEND_API_URL = "https://api.resend.com/emails";
     private final OkHttpClient client = new OkHttpClient();
 
+    // === БАЗОВЫЙ МЕТОД ОТПРАВКИ ===
     public boolean sendEmail(String to, String subject, String htmlBody) {
         if (apiKey == null || apiKey.isEmpty()) {
             System.out.println("⚠️ Resend API key не настроен. Email не отправлен на " + to);
@@ -61,45 +69,32 @@ public class EmailService {
         }
     }
 
-    // Новая заявка (для HR)
-    public void notifyNewApplication(String hrEmail, String applicantName, String applicantEmail, String careerTrack) {
+    // === УВЕДОМЛЕНИЕ HR О НОВОЙ ЗАЯВКЕ ===
+    public void notifyHrAboutNewApplicant(String applicantName, String applicantEmail, String careerTrack) {
+        if (hrEmail == null || hrEmail.isEmpty()) {
+            System.out.println("⚠️ HR email не настроен. Уведомление не отправлено.");
+            return;
+        }
+
         String subject = "🆕 Новая заявка: " + applicantName;
-        String html = "<h2>Поступила новая заявка!</h2>" +
+        String html = "<div style='font-family: sans-serif; padding: 20px;'>" +
+                "<h2 style='color: #667eea;'>Поступила новая заявка!</h2>" +
                 "<p><b>ФИО:</b> " + applicantName + "</p>" +
                 "<p><b>Email:</b> " + applicantEmail + "</p>" +
                 "<p><b>Карьерный трек:</b> " + careerTrack + "</p>" +
-                "<p>Откройте приложение HIWork для обработки заявки.</p>";
+                "<hr>" +
+                "<p style='color: #888;'>Откройте приложение HIWork для обработки.</p>" +
+                "</div>";
+
         sendEmail(hrEmail, subject, html);
     }
 
-    //Сотрудник принят (для кандидата)
-    public void notifyHired(String candidateEmail, String candidateName, String qrCode) {
-        String subject = "🎉 Поздравляем! Вы приняты в HIWork!";
-        String html = "<h2>Поздравляем, " + candidateName + "!</h2>" +
-                "<p>Ваша заявка одобрена. Вы приняты в команду HIWork!</p>" +
-                "<p><b>Ваш QR-код для доступа:</b> <span style='font-size:24px; color:#667eea;'>" + qrCode + "</span></p>" +
-                "<p>Сохраните этот код — он понадобится при входе.</p>" +
-                "<p>Добро пожаловать в команду! 🚀</p>";
-        sendEmail(candidateEmail, subject, html);
-    }
-
-    //Заявка отклонена
-    public void notifyRejected(String candidateEmail, String candidateName) {
-        String subject = "Решение по вашей заявке в HIWork";
-        String html = "<h2>Здравствуйте, " + candidateName + "!</h2>" +
-                "<p>Благодарим за интерес к HIWork.</p>" +
-                "<p>К сожалению, на данный момент мы не готовы предложить вам позицию.</p>" +
-                "<p>Мы сохраним ваше резюме и свяжемся, если появятся подходящие вакансии.</p>" +
-                "<p>Удачи в поиске! 💙</p>";
-        sendEmail(candidateEmail, subject, html);
-    }
-
-    // Приглашение на собеседование
+    // === ПРИГЛАШЕНИЕ НА СОБЕСЕДОВАНИЕ ===
     public void sendInterviewInvite(String email, String applicantName) {
         String subject = "📅 Приглашение на собеседование в HIWork";
         String html = "<div style='font-family: sans-serif; padding: 20px;'>" +
                 "<h2 style='color: #667eea;'>Здравствуйте, " + applicantName + "!</h2>" +
-                "<p>Мы рассмотрели вашу заявку и хотели бы пригласить вас на собеседование.</p>" +
+                "<p>Мы рассмотрили вашу заявку и хотели бы пригласить вас на собеседование.</p>" +
                 "<p><b>Детали собеседования:</b></p>" +
                 "<ul>" +
                 "<li>Формат: Онлайн (Zoom/Teams)</li>" +
@@ -113,7 +108,7 @@ public class EmailService {
         sendEmail(email, subject, html);
     }
 
-    //  Подтверждение найма
+    // === ПОДТВЕРЖДЕНИЕ НАЙМА ===
     public void sendHireConfirmation(String email, String applicantName, String careerTrack, String qrCode) {
         String subject = "🎉 Поздравляем! Вы приняты в HIWork!";
         String html = "<div style='font-family: sans-serif; padding: 20px;'>" +
@@ -131,23 +126,22 @@ public class EmailService {
 
         sendEmail(email, subject, html);
     }
-    // ✅ Уведомление HR о новой заявке
-    public void notifyHrAboutNewApplicant(String applicantName, String applicantEmail, String careerTrack) {
-        if (hrEmail == null || hrEmail.isEmpty()) {
-            System.out.println("⚠️ HR email не настроен. Уведомление не отправлено.");
-            return;
-        }
 
-        String subject = "🆕 Новая заявка: " + applicantName;
+    // === УВЕДОМЛЕНИЕ ОБ ОТКАЗЕ ===
+    public void notifyRejected(String candidateEmail, String candidateName) {
+        String subject = "Решение по вашей заявке в HIWork";
         String html = "<div style='font-family: sans-serif; padding: 20px;'>" +
-                "<h2 style='color: #667eea;'>Поступила новая заявка!</h2>" +
-                "<p><b>ФИО:</b> " + applicantName + "</p>" +
-                "<p><b>Email:</b> " + applicantEmail + "</p>" +
-                "<p><b>Карьерный трек:</b> " + careerTrack + "</p>" +
-                "<hr>" +
-                "<p style='color: #888;'>Откройте приложение HIWork для обработки.</p>" +
+                "<h2>Здравствуйте, " + candidateName + "!</h2>" +
+                "<p>Благодарим за интерес к HIWork.</p>" +
+                "<p>К сожалению, на данный момент мы не готовы предложить вам позицию.</p>" +
+                "<p>Мы сохраним ваше резюме и свяжемся, если появятся подходящие вакансии.</p>" +
+                "<p>Удачи в поиске! 💙</p>" +
                 "</div>";
-    
-        sendEmail(hrEmail, subject, html);
+
+        sendEmail(candidateEmail, subject, html);
+    }
+
+    public void notifyNewApplication(String hrEmailParam, String applicantName, String applicantEmail, String careerTrack) {
+        notifyHrAboutNewApplicant(applicantName, applicantEmail, careerTrack);
     }
 }
