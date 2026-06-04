@@ -49,6 +49,9 @@ public class ApplicationController {
     @Autowired
     private FileService fileService;
 
+    @Autowired
+    private UserRepository userRepository;
+
     @Value("${app.base-url:https://hiwork-api.onrender.com}")
     private String baseUrl;
 
@@ -337,6 +340,60 @@ public class ApplicationController {
         } catch (Exception e) {
             log.log(Level.SEVERE, "Login error", e);
             return ResponseEntity.internalServerError().body(Map.of("error", "Ошибка сервера"));
+        }
+    }
+    @PostMapping("/{id}/complete")
+    public ResponseEntity<?> completeApplication(@PathVariable Long id) {
+        try {
+            // 1. Находим заявку
+            Application app = applicationRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Заявка не найдена"));
+
+            // 2. Проверяем, что статус "hired"
+            if (!"hired".equals(app.getStatus())) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "Можно перенести только принятых сотрудников"));
+            }
+
+            // 3. Создаём нового сотрудника
+            User employee = new User();
+            employee.setEmail(app.getEmail());
+            employee.setFullName(app.getFullName());
+            employee.setCareerTrack(app.getCareerTrack());
+            employee.setDepartment(app.getDepartment());
+            employee.setAboutMe(app.getAboutMe());
+            employee.setResumeUrl(app.getResumeUrl());
+            employee.setPortfolioUrl(app.getPortfolioUrl());
+            employee.setProfilePhotoUrl(app.getProfilePhotoUrl());
+            employee.setRole("EMPLOYEE");
+            employee.setLevel("Junior"); // По умолчанию Junior
+        
+            // Генерируем QR-код для сотрудника (действует 2 минуты)
+            employee.generateQrCodeWithTimeout();
+        
+            // Временный пароль (в реальности нужно отправить на email)
+            String tempPassword = "temp123"; // TODO: Генерировать случайный
+            employee.setPasswordHash(tempPassword); // В реальности нужно хешировать!
+
+            // 4. Сохраняем сотрудника
+            userRepository.save(employee);
+
+            // 5. Удаляем заявку
+            applicationRepository.delete(app);
+
+            System.out.println("✅ Заявка " + id + " перенесена в сотрудники: " + app.getEmail());
+
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Сотрудник успешно добавлен",
+                    "employeeId", employee.getId(),
+                    "email", employee.getEmail()
+            ));
+
+        } catch (Exception e) {
+            System.err.println("❌ Ошибка при переносе заявки: " + e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage()));
         }
     }
 }
