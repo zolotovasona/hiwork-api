@@ -1,387 +1,346 @@
 package com.example.demo.controller;
 
 import com.example.demo.entity.Application;
+import com.example.demo.entity.CareerTrack;
 import com.example.demo.entity.User;
 import com.example.demo.repository.ApplicationRepository;
+import com.example.demo.repository.CareerTrackRepository;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.service.EmailService;
 import com.example.demo.service.FileService;
-import lombok.extern.java.Log;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.logging.Level;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @CrossOrigin(origins = {"https://hiwork-hiring-site.onrender.com", "http://localhost:5500", "*"})
 @RestController
 @RequestMapping("/api/applications")
-@Log
 public class ApplicationController {
-
-    @Autowired
-    private ApplicationRepository appRepo;
-
-    @Autowired
-    private UserRepository userRepo;
-
-    @Autowired
-    private PasswordEncoder passwordEncoder;
-
-    @Autowired
-    private EmailService emailService;
 
     @Autowired
     private ApplicationRepository applicationRepository;
 
     @Autowired
-    private FileService fileService;
-
-    @Autowired
     private UserRepository userRepository;
 
-    @Value("${app.base-url:https://hiwork-api.onrender.com}")
-    private String baseUrl;
+    @Autowired
+    private CareerTrackRepository careerTrackRepository;
 
-    private final String uploadDir = "uploads/";
+    @Autowired
+    private EmailService emailService;
 
-    @GetMapping
-    public ResponseEntity<?> getAll(@RequestParam(required = false) String status) {
-        try {
-            List<Application> applications;
-            if (status != null && !status.isEmpty()) {
-                applications = appRepo.findByStatusOrderByCreatedAtDesc(status);
-            } else {
-                applications = appRepo.findAllByOrderByCreatedAtDesc();
-            }
-            return ResponseEntity.ok(applications);
-        } catch (Exception e) {
-            log.log(Level.SEVERE, "Ошибка при получении заявок", e);
-            return ResponseEntity.internalServerError()
-                    .body(Map.of("error", "Не удалось загрузить заявки: " + e.getMessage()));
-        }
-    }
+    @Autowired
+    private FileService fileService;
 
+    // === СОЗДАНИЕ НОВОЙ ЗАЯВКИ ===
     @PostMapping
     public ResponseEntity<?> createApplication(
-            @RequestParam String fullName,
-            @RequestParam String email,
-            @RequestParam String careerTrack,
-            @RequestParam(required = false) String department,
-            @RequestParam(required = false) String experience,
-            @RequestParam(required = false) String aboutMe,
-            @RequestParam(required = false) String resumeTextContent,
-            @RequestParam(required = false) MultipartFile resumeFile,
-            @RequestParam(required = false) MultipartFile portfolio,
-            @RequestParam(required = false) MultipartFile photo
-    ) {
+            @RequestParam("fullName") String fullName,
+            @RequestParam("email") String email,
+            @RequestParam("careerTrack") String careerTrack,
+            @RequestParam(value = "department", required = false) String department,
+            @RequestParam(value = "experience", required = false) String experience,
+            @RequestParam(value = "aboutMe", required = false) String aboutMe,
+            @RequestParam(value = "resumeTextContent", required = false) String resumeTextContent,
+            @RequestParam(value = "resumeFile", required = false) MultipartFile resumeFile,
+            @RequestParam(value = "portfolio", required = false) MultipartFile portfolioFile,
+            @RequestParam(value = "photo", required = false) MultipartFile photoFile) {
+
         try {
+            System.out.println("📩 Новая заявка от: " + fullName + " (" + email + ")");
+
             Application app = new Application();
             app.setFullName(fullName);
             app.setEmail(email);
             app.setCareerTrack(careerTrack);
-            app.setDepartment(department);
-            app.setExperience(experience);
-            app.setAboutMe(aboutMe);
-            app.setResumeTextContent(resumeTextContent);
+            app.setDepartment(department != null ? department : "");
+            app.setExperience(experience != null ? experience : "0");
+            app.setAboutMe(aboutMe != null ? aboutMe : "");
+            app.setResumeTextContent(resumeTextContent != null ? resumeTextContent : "");
             app.setStatus("new");
 
-            // ✅ Сохраняем файлы
-            if (photo != null && !photo.isEmpty()) {
-                String photoUrl = fileService.saveFile(photo, "photo");
-                app.setProfilePhotoUrl(photoUrl);
-            }
-
+            // Загружаем файлы
             if (resumeFile != null && !resumeFile.isEmpty()) {
-                String resumeUrl = fileService.saveFile(resumeFile, "resume");
-                app.setResumeUrl(resumeUrl);
+                String url = fileService.saveFile(resumeFile, "resume");
+                app.setResumeUrl(url);
             }
-
-            if (portfolio != null && !portfolio.isEmpty()) {
-                String portfolioUrl = fileService.saveFile(portfolio, "portfolio");
-                app.setPortfolioUrl(portfolioUrl);
+            if (portfolioFile != null && !portfolioFile.isEmpty()) {
+                String url = fileService.saveFile(portfolioFile, "portfolio");
+                app.setPortfolioUrl(url);
+            }
+            if (photoFile != null && !photoFile.isEmpty()) {
+                String url = fileService.saveFile(photoFile, "photo");
+                app.setProfilePhotoUrl(url);
             }
 
             applicationRepository.save(app);
-            return ResponseEntity.ok(Map.of("success", true, "id", app.getId()));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
-    }
+            System.out.println("✅ Заявка сохранена с id=" + app.getId());
 
-    @PostMapping("/{id}/interview")
-    public ResponseEntity<?> interview(@PathVariable Long id) {
-        try {
-            Application app = appRepo.findById(id)
-                    .orElseThrow(() -> new RuntimeException("Заявка не найдена"));
-
-            if (!"new".equalsIgnoreCase(app.getStatus())) {
-                return ResponseEntity.badRequest()
-                        .body(Map.of("error", "Можно пригласить только новую заявку"));
-            }
-
-            app.setStatus("interviewing");
-            appRepo.save(app);
-
+            // ✅ Уведомляем HR о новой заявке
             try {
-                emailService.sendInterviewInvite(app.getEmail(), app.getFullName());
-            } catch (Exception mailErr) {
-                log.warning("⚠️ Письмо-приглашение не отправлено: " + mailErr.getMessage());
+                emailService.notifyHrAboutNewApplicant(fullName, email, careerTrack);
+            } catch (Exception e) {
+                System.err.println("⚠️ Ошибка отправки email (не критично): " + e.getMessage());
             }
 
-            log.info("✅ Заявка " + id + " переведена в собеседование");
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "message", "Приглашение отправлено",
-                    "status", "interviewing"
-            ));
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", true);
+            result.put("id", app.getId());
+            result.put("message", "Заявка успешно отправлена");
+            return ResponseEntity.ok(result);
 
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
-            log.log(Level.SEVERE, "Ошибка при приглашении", e);
-            return ResponseEntity.internalServerError()
-                    .body(Map.of("error", "Ошибка сервера: " + e.getMessage()));
+            System.err.println("❌ Ошибка создания заявки: " + e.getMessage());
+            e.printStackTrace();
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
         }
     }
 
-    @PostMapping("/{id}/hire")
-    public ResponseEntity<?> hire(@PathVariable Long id, @RequestBody(required = false) Map<String, String> updates) {
+    // === ПОЛУЧЕНИЕ ВСЕХ ЗАЯВОК ===
+    @GetMapping
+    public ResponseEntity<?> getAllApplications() {
         try {
-            Application app = appRepo.findById(id)
-                    .orElseThrow(() -> new RuntimeException("Заявка не найдена"));
+            List<Application> apps = applicationRepository.findAllByOrderByCreatedAtDesc();
+            List<Map<String, Object>> result = new ArrayList<>();
 
-            if (!"interviewing".equalsIgnoreCase(app.getStatus())) {
-                return ResponseEntity.badRequest()
-                        .body(Map.of("error", "Можно принять только кандидата с собеседования"));
+            for (Application app : apps) {
+                Map<String, Object> map = new HashMap<>();
+                map.put("id", app.getId());
+                map.put("fullName", app.getFullName() != null ? app.getFullName() : "");
+                map.put("email", app.getEmail() != null ? app.getEmail() : "");
+                map.put("careerTrack", app.getCareerTrack() != null ? app.getCareerTrack() : "");
+                map.put("department", app.getDepartment() != null ? app.getDepartment() : "");
+                map.put("experience", app.getExperience() != null ? app.getExperience() : "0");
+                map.put("aboutMe", app.getAboutMe() != null ? app.getAboutMe() : "");
+                map.put("resumeTextContent", app.getResumeTextContent() != null ? app.getResumeTextContent() : "");
+                map.put("resumeUrl", app.getResumeUrl() != null ? app.getResumeUrl() : "");
+                map.put("portfolioUrl", app.getPortfolioUrl() != null ? app.getPortfolioUrl() : "");
+                map.put("profilePhotoUrl", app.getProfilePhotoUrl() != null ? app.getProfilePhotoUrl() : "");
+                map.put("status", app.getStatus() != null ? app.getStatus() : "new");
+                map.put("qrCode", app.getQrCode() != null ? app.getQrCode() : "");
+                map.put("qrCodeExpiresAt", app.getQrCodeExpiresAt() != null ? app.getQrCodeExpiresAt().toString() : "");
+                map.put("createdAt", app.getCreatedAt() != null ? app.getCreatedAt().toString() : "");
+                result.add(map);
             }
 
-            if (updates != null) {
-                if (updates.containsKey("fullName") && updates.get("fullName") != null) {
-                    app.setFullName(updates.get("fullName").trim());
-                }
-                if (updates.containsKey("careerTrack") && updates.get("careerTrack") != null) {
-                    app.setCareerTrack(updates.get("careerTrack").trim());
-                }
-                if (updates.containsKey("department") && updates.get("department") != null) {
-                    app.setDepartment(updates.get("department").trim());
-                }
-            }
-
-            String qrCode = String.format("%07d", new java.util.Random().nextInt(10_000_000));
-            LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(2);
-
-            app.setQrCode(qrCode);
-            app.setQrCodeExpiresAt(expiresAt);
-            app.setStatus("hired");
-            appRepo.save(app);
-
-            User employee = userRepo.findByEmail(app.getEmail()).orElse(new User());
-            employee.setEmail(app.getEmail());
-            employee.setPasswordHash(passwordEncoder.encode("temp123"));
-            employee.setFullName(app.getFullName());
-            employee.setCareerTrack(app.getCareerTrack());
-            employee.setDepartment(app.getDepartment());
-            employee.setAboutMe(app.getAboutMe());
-            employee.setResumeUrl(app.getResumeUrl());
-            employee.setPortfolioUrl(app.getPortfolioUrl());
-            employee.setProfilePhotoUrl(app.getProfilePhotoUrl());
-            employee.setQrCode(qrCode);
-            employee.setQrCodeExpiresAt(expiresAt);
-            employee.setRole("EMPLOYEE");
-            employee.setCreatedAt(LocalDateTime.now());
-            userRepo.save(employee);
-
-            try {
-                String qrImageUrl = baseUrl + "/api/qr/generate?code=" + qrCode + "&size=250";
-                emailService.sendHireConfirmation(employee.getEmail(), employee.getFullName(), qrCode, qrImageUrl);
-            } catch (Exception mailErr) {
-                log.warning("⚠️ Письмо о приёме не отправлено: " + mailErr.getMessage());
-            }
-
-            log.info("✅ Сотрудник принят: " + employee.getEmail() + ", QR: " + qrCode);
-
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "qrCode", qrCode,
-                    "expiresAt", expiresAt.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
-                    "secondsRemaining", 120,
-                    "message", "Сотрудник создан. Код действителен 2 минуты."
-            ));
-
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        } catch (Exception e) {
-            log.log(Level.SEVERE, "Ошибка при приёме на работу", e);
-            return ResponseEntity.internalServerError()
-                    .body(Map.of("error", "Ошибка сервера: " + e.getMessage()));
-        }
-    }
-
-    @PostMapping("/{id}/regenerate-qr")
-    public ResponseEntity<?> regenerateQr(@PathVariable Long id) {
-        try {
-            Application app = appRepo.findById(id)
-                    .orElseThrow(() -> new RuntimeException("Заявка не найдена"));
-
-            if (!"hired".equals(app.getStatus())) {
-                return ResponseEntity.badRequest()
-                        .body(Map.of("error", "Перегенерация доступна только для принятых"));
-            }
-
-            String newQr = String.format("%07d", new java.util.Random().nextInt(10_000_000));
-            LocalDateTime newExpires = LocalDateTime.now().plusMinutes(2);
-
-            app.setQrCode(newQr);
-            app.setQrCodeExpiresAt(newExpires);
-            appRepo.save(app);
-
-            User employee = userRepo.findByEmail(app.getEmail()).orElse(null);
-            if (employee != null) {
-                employee.setQrCode(newQr);
-                employee.setQrCodeExpiresAt(newExpires);
-                userRepo.save(employee);
-            }
-
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "qrCode", newQr,
-                    "expiresAt", newExpires.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-            ));
+            return ResponseEntity.ok(result);
 
         } catch (Exception e) {
+            System.err.println("❌ Ошибка получения заявок: " + e.getMessage());
             return ResponseEntity.internalServerError()
-                    .body(Map.of("error", "Ошибка: " + e.getMessage()));
+                    .body(Map.of("error", e.getMessage()));
         }
     }
 
-    @DeleteMapping("/{id}")
-    public ResponseEntity<?> reject(@PathVariable Long id) {
-        if (!appRepo.existsById(id)) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Заявка не найдена"));
-        }
-        appRepo.deleteById(id);
-        return ResponseEntity.ok(Map.of("success", true, "message", "Заявка удалена"));
-    }
-
-    private String saveFile(MultipartFile file, String category) throws IOException {
-        if (file.isEmpty()) {
-            throw new IllegalArgumentException("Пустой файл");
-        }
-
-        String originalName = file.getOriginalFilename();
-        if (originalName == null || originalName.isEmpty()) {
-            throw new IllegalArgumentException("Неизвестное имя файла");
-        }
-
-        String extension = "";
-        int dotIndex = originalName.lastIndexOf('.');
-        if (dotIndex > 0 && dotIndex < originalName.length() - 1) {
-            extension = originalName.substring(dotIndex).toLowerCase();
-        }
-
-        String uniqueName = UUID.randomUUID().toString() + extension;
-        Path path = Paths.get(uploadDir + category + "/" + uniqueName);
-
-        Files.createDirectories(path.getParent());
-        Files.write(path, file.getBytes());
-
-        return baseUrl + "/api/files/" + category + "/" + uniqueName;
-    }
-
+    // === ПОЛУЧЕНИЕ ОПЦИЙ (треки и отделы) ===
     @GetMapping("/options")
-    public ResponseEntity<?> getAvailableOptions() {
+    public ResponseEntity<?> getOptions() {
         try {
-            List<String> careerTracks = appRepo.findDistinctCareerTracks();
-            List<String> departments = appRepo.findDistinctDepartments();
+            List<Application> apps = applicationRepository.findAll();
+            
+            List<String> careerTracks = apps.stream()
+                    .map(Application::getCareerTrack)
+                    .filter(t -> t != null && !t.isEmpty())
+                    .distinct()
+                    .sorted()
+                    .collect(Collectors.toList());
 
-            return ResponseEntity.ok(Map.of(
-                    "careerTracks", careerTracks != null ? careerTracks : List.of(),
-                    "departments", departments != null ? departments : List.of()
-            ));
+            List<String> departments = apps.stream()
+                    .map(Application::getDepartment)
+                    .filter(d -> d != null && !d.isEmpty())
+                    .distinct()
+                    .sorted()
+                    .collect(Collectors.toList());
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("careerTracks", careerTracks);
+            result.put("departments", departments);
+
+            return ResponseEntity.ok(result);
+
         } catch (Exception e) {
-            log.log(Level.SEVERE, "Ошибка при получении опций", e);
             return ResponseEntity.internalServerError()
-                    .body(Map.of("error", "Не удалось загрузить опции"));
+                    .body(Map.of("error", e.getMessage()));
         }
     }
 
-    @PostMapping("/auth/login")
-    public ResponseEntity<?> login(@RequestBody Map<String, String> credentials) {
+    // === ПЕРЕВОД В СОБЕСЕДОВАНИЕ ===
+    @PostMapping("/{id}/interview")
+    public ResponseEntity<?> moveToInterview(@PathVariable Long id) {
         try {
-            String email = credentials.get("email");
-            String password = credentials.get("password");
-
-            User user = userRepo.findByEmail(email)
-                    .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
-
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "userId", user.getId(),
-                    "role", user.getRole(),
-                    "fullName", user.getFullName(),
-                    "email", user.getEmail()
-            ));
-
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        } catch (Exception e) {
-            log.log(Level.SEVERE, "Login error", e);
-            return ResponseEntity.internalServerError().body(Map.of("error", "Ошибка сервера"));
-        }
-    }
-    @PostMapping("/{id}/complete")
-    public ResponseEntity<?> completeApplication(@PathVariable Long id) {
-        try {
-            // 1. Находим заявку
             Application app = applicationRepository.findById(id)
                     .orElseThrow(() -> new RuntimeException("Заявка не найдена"));
 
-            // 2. Проверяем, что статус "hired"
-            if (!"hired".equals(app.getStatus())) {
-                return ResponseEntity.badRequest()
-                        .body(Map.of("error", "Можно перенести только принятых сотрудников"));
+            app.setStatus("interviewing");
+            applicationRepository.save(app);
+
+            System.out.println("✅ Заявка " + id + " переведена в собеседование");
+
+            // ✅ Уведомляем кандидата
+            try {
+                emailService.sendInterviewInvite(app.getEmail(), app.getFullName());
+            } catch (Exception e) {
+                System.err.println("⚠️ Ошибка отправки email: " + e.getMessage());
             }
 
-            // 3. Создаём нового сотрудника
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Заявка переведена в собеседование"
+            ));
+
+        } catch (Exception e) {
+            System.err.println("❌ Ошибка: " + e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // === НАЙМ СОТРУДНИКА ===
+    @PostMapping("/{id}/hire")
+    public ResponseEntity<?> hireApplicant(
+            @PathVariable Long id,
+            @RequestBody(required = false) Map<String, String> body) {
+        try {
+            Application app = applicationRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Заявка не найдена"));
+
+            // Обновляем трек и отдел, если переданы
+            if (body != null) {
+                if (body.containsKey("careerTrack")) {
+                    app.setCareerTrack(body.get("careerTrack"));
+                }
+                if (body.containsKey("department")) {
+                    app.setDepartment(body.get("department"));
+                }
+            }
+
+            // Генерируем QR-код
+            app.generateQrCode();
+            app.setStatus("hired");
+            applicationRepository.save(app);
+
+            System.out.println("✅ Сотрудник принят: " + app.getEmail() + ", QR: " + app.getQrCode());
+
+            // ✅ Уведомляем сотрудника о найме
+            try {
+                emailService.sendHireConfirmation(
+                        app.getEmail(),
+                        app.getFullName(),
+                        app.getCareerTrack(),
+                        app.getQrCode()
+                );
+            } catch (Exception e) {
+                System.err.println("⚠️ Ошибка отправки email: " + e.getMessage());
+            }
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", true);
+            result.put("message", "Сотрудник принят");
+            result.put("qrCode", app.getQrCode());
+            result.put("qrCodeExpiresAt", app.getQrCodeExpiresAt().toString());
+            return ResponseEntity.ok(result);
+
+        } catch (Exception e) {
+            System.err.println("❌ Ошибка найма: " + e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // === РЕГЕНЕРАЦИЯ QR-КОДА ===
+    @PostMapping("/{id}/regenerate-qr")
+    public ResponseEntity<?> regenerateQr(@PathVariable Long id) {
+        try {
+            Application app = applicationRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Заявка не найдена"));
+
+            app.generateQrCode();
+            applicationRepository.save(app);
+
+            System.out.println("🔄 QR перегенерирован для заявки " + id);
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", true);
+            result.put("qrCode", app.getQrCode());
+            result.put("qrCodeExpiresAt", app.getQrCodeExpiresAt().toString());
+            return ResponseEntity.ok(result);
+
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // === ЗАВЕРШЕНИЕ ЗАЯВКИ (ПЕРЕНОС В СОТРУДНИКИ) ===
+    @PostMapping("/{id}/complete")
+    public ResponseEntity<?> completeApplication(@PathVariable Long id) {
+        try {
+            Application app = applicationRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Заявка не найдена с id=" + id));
+
+            System.out.println("📋 Обрабатываем заявку id=" + id + ", email=" + app.getEmail());
+
+            if (!"hired".equals(app.getStatus())) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "Можно перенести только принятых сотрудников (статус: " + app.getStatus() + ")"));
+            }
+
+            // Проверяем, нет ли уже пользователя с таким email
+            Optional<User> existingUser = userRepository.findByEmail(app.getEmail());
+            if (existingUser.isPresent()) {
+                System.out.println("⚠️ Пользователь с email " + app.getEmail() + " уже существует. Обновляем данные.");
+                User emp = existingUser.get();
+                emp.setFullName(app.getFullName());
+                emp.setCareerTrack(app.getCareerTrack());
+                emp.setDepartment(app.getDepartment());
+                emp.setAboutMe(app.getAboutMe());
+                emp.setResumeUrl(app.getResumeUrl());
+                emp.setPortfolioUrl(app.getPortfolioUrl());
+                emp.setProfilePhotoUrl(app.getProfilePhotoUrl());
+                emp.setRole("EMPLOYEE");
+                if (emp.getLevel() == null) emp.setLevel("Junior");
+                userRepository.save(emp);
+
+                applicationRepository.delete(app);
+
+                return ResponseEntity.ok(Map.of(
+                        "success", true,
+                        "message", "Сотрудник обновлён (уже существовал)",
+                        "employeeId", emp.getId()
+                ));
+            }
+
+            // Создаём нового сотрудника
             User employee = new User();
             employee.setEmail(app.getEmail());
-            employee.setFullName(app.getFullName());
-            employee.setCareerTrack(app.getCareerTrack());
-            employee.setDepartment(app.getDepartment());
+            employee.setFullName(app.getFullName() != null ? app.getFullName() : "Неизвестно");
+            employee.setCareerTrack(app.getCareerTrack() != null ? app.getCareerTrack() : "");
+            employee.setDepartment(app.getDepartment() != null ? app.getDepartment() : "");
             employee.setAboutMe(app.getAboutMe());
             employee.setResumeUrl(app.getResumeUrl());
             employee.setPortfolioUrl(app.getPortfolioUrl());
             employee.setProfilePhotoUrl(app.getProfilePhotoUrl());
             employee.setRole("EMPLOYEE");
-            employee.setLevel("Junior"); // По умолчанию Junior
-        
-            // Генерируем QR-код для сотрудника (действует 2 минуты)
+            employee.setLevel("Junior");
+
             employee.generateQrCodeWithTimeout();
-        
-            // Временный пароль (в реальности нужно отправить на email)
-            String tempPassword = "temp123"; // TODO: Генерировать случайный
-            employee.setPasswordHash(tempPassword); // В реальности нужно хешировать!
 
-            // 4. Сохраняем сотрудника
+            String tempPassword = "TempPass_" + System.currentTimeMillis();
+            employee.setPasswordHash(tempPassword);
+
             userRepository.save(employee);
+            System.out.println("✅ Сотрудник сохранён с id=" + employee.getId());
 
-            // 5. Удаляем заявку
             applicationRepository.delete(app);
-
-            System.out.println("✅ Заявка " + id + " перенесена в сотрудники: " + app.getEmail());
+            System.out.println("✅ Заявка " + id + " удалена");
 
             return ResponseEntity.ok(Map.of(
                     "success", true,
@@ -391,7 +350,38 @@ public class ApplicationController {
             ));
 
         } catch (Exception e) {
-            System.err.println("❌ Ошибка при переносе заявки: " + e.getMessage());
+            System.err.println("❌ Ошибка при переносе: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // === ОТКЛОНЕНИЕ ЗАЯВКИ ===
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> rejectApplication(@PathVariable Long id) {
+        try {
+            Application app = applicationRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Заявка не найдена"));
+
+            String email = app.getEmail();
+            String name = app.getFullName();
+
+            applicationRepository.delete(app);
+            System.out.println("❌ Заявка " + id + " отклонена");
+
+            try {
+                emailService.notifyRejected(email, name);
+            } catch (Exception e) {
+                System.err.println("⚠️ Ошибка отправки email: " + e.getMessage());
+            }
+
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Заявка отклонена"
+            ));
+
+        } catch (Exception e) {
             return ResponseEntity.badRequest()
                     .body(Map.of("error", e.getMessage()));
         }
