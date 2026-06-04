@@ -61,6 +61,7 @@ public class EmailService {
         }
     }
 
+    // Новая заявка (для HR)
     public void notifyNewApplication(String hrEmail, String applicantName, String applicantEmail, String careerTrack) {
         String subject = "🆕 Новая заявка: " + applicantName;
         String html = "<h2>Поступила новая заявка!</h2>" +
@@ -71,6 +72,7 @@ public class EmailService {
         sendEmail(hrEmail, subject, html);
     }
 
+    //Сотрудник принят (для кандидата)
     public void notifyHired(String candidateEmail, String candidateName, String qrCode) {
         String subject = "🎉 Поздравляем! Вы приняты в HIWork!";
         String html = "<h2>Поздравляем, " + candidateName + "!</h2>" +
@@ -81,6 +83,7 @@ public class EmailService {
         sendEmail(candidateEmail, subject, html);
     }
 
+    //Заявка отклонена
     public void notifyRejected(String candidateEmail, String candidateName) {
         String subject = "Решение по вашей заявке в HIWork";
         String html = "<h2>Здравствуйте, " + candidateName + "!</h2>" +
@@ -89,5 +92,43 @@ public class EmailService {
                 "<p>Мы сохраним ваше резюме и свяжемся, если появятся подходящие вакансии.</p>" +
                 "<p>Удачи в поиске! 💙</p>";
         sendEmail(candidateEmail, subject, html);
+    }
+
+    // Приглашение на собеседование
+    public void sendInterviewInvite(String email, String applicantName) {
+        String subject = "📅 Приглашение на собеседование в HIWork";
+        String html = "<div style='font-family: sans-serif; padding: 20px;'>" +
+                "<h2 style='color: #667eea;'>Здравствуйте, " + applicantName + "!</h2>" +
+                "<p>Мы рассмотрели вашу заявку и хотели бы пригласить вас на собеседование.</p>" +
+                "<p><b>Детали собеседования:</b></p>" +
+                "<ul>" +
+                "<li>Формат: Онлайн (Zoom/Teams)</li>" +
+                "<li>Длительность: 30-45 минут</li>" +
+                "<li>Что взять с собой: Ноутбук, вопросы к нам</li>" +
+                "</ul>" +
+                "<p>Мы свяжемся с вами в ближайшее время для согласования времени.</p>" +
+                "<p>С уважением,<br>Команда HIWork 💙</p>" +
+                "</div>";
+
+        sendEmail(email, subject, html);
+    }
+
+    //  Подтверждение найма
+    public void sendHireConfirmation(String email, String applicantName, String careerTrack, String qrCode) {
+        String subject = "🎉 Поздравляем! Вы приняты в HIWork!";
+        String html = "<div style='font-family: sans-serif; padding: 20px;'>" +
+                "<h2 style='color: #667eea;'>Поздравляем, " + applicantName + "!</h2>" +
+                "<p>Мы рады сообщить, что ваша заявка одобрена! Вы приняты в команду HIWork!</p>" +
+                "<p><b>Ваша позиция:</b> " + careerTrack + "</p>" +
+                "<p><b>Ваш QR-код для доступа:</b></p>" +
+                "<div style='background: #f0f0f0; padding: 20px; text-align: center; margin: 20px 0;'>" +
+                "<span style='font-size: 32px; color: #667eea; font-weight: bold;'>" + qrCode + "</span>" +
+                "</div>" +
+                "<p>Сохраните этот код — он понадобится при первом входе в систему.</p>" +
+                "<p>Добро пожаловать в команду! 🚀</p>" +
+                "<p>С уважением,<br>Команда HIWork 💙</p>" +
+                "</div>";
+
+        sendEmail(email, subject, html);
     }
 }
